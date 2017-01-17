@@ -1,0 +1,51 @@
+##### step1 ##### 
+find . -type f -name "*_0*0.log" -exec /bin/cat {} \;| > all.log
+
+
+
+  11 Click_201609Super_sentra
+  18 Refer_2016fondant
+  22 Click_2016fondant_RegisterPage
+  29 Click_SubMenu_Car_Build
+  30 Click_HomeBanner_Bottom_Tab
+  38 Click_HomeBanner_TestDrive
+  45 Click_SubMenu_ExploreNissan
+  54 Click_Car_Build_6_Final
+  58 Click_Car_FBShare
+  72 Click_HomeBanner_Bottom
+ 111 TestDrive_Submit_Click
+ 141 Click_SubMenu_News
+ 239 Click_Learn_More
+ 258 Click_Car_Build_5_Accessory
+ 263 Click_HomeBanner_Middle
+ 437 Page_Search
+ 459 Click_Car_Build_4_Color
+ 472 Page_201609Super_sentra
+ 498 Click_HomeBanner_Floating_B
+ 565 Page_TestDrive_PC_Chosen
+ 632 Click_Car_Build_2_Choose
+ 671 Page_TestDrive_PC_Looking
+ 680 Click_Car_Build_1_Start
+ 722 Click_SubMenu_BuyZone
+ 743 Click_HomeBanner_Floating_A
+ 772 Click_Car_Build_3_spec
+110690 Page_Car
+1442 Click_Overview_Dealers
+1515 Click_Car_Offering
+156441 General
+1624 Click_bigtiida_10
+17908 Page_Car_Spec
+2171 Click_Car_DownLoad
+2212 Click_SubMenu_Car_ChooseCar
+22620 Click_SubMenu_Car_ChooseBanner
+2488 Page_TestDrive_MOB
+3184 Click_Lineup_Overview
+37581 Page_bigtiida_10
+622497 Page_Car_Scrolling
+68168 Click_MainMenu
+78886 Page
+8244 Click_Lineup_SideBar
+9156 Page_Home
+
+cat all.log | grep -v '[0-9]{' | grep -v '[a-zA-Z]{' | grep -v '\"utm{"\c' | grep -v '\"{' | /usr/local/bin/jq  '{clientId: .session.cid, fid: .session.fid, gid: .session.gid, screenResolution: .general.sr, viewportSize: .general.vs, language: .general.la, Event: .gtm.event, car: .gtm.car, type: .gtm.type, URL_Current: .gtm.urlCurrent, URL_Referrer: .gtm.urlReferrer, Device: .general.dv, UTM_Source: .gtm.utm.utmSource, UTM_Medium: .gtm.utm.utmMedium, UTM_Term: .gtm.utm.utmTerm, UTM_Content: .gtm.utm.utmContent, UTM_Compaign: .gtm.utm.utmCompaign, timeZone: .general.tz, userAgent: .general.ua, IP: .general.ip, Time: .general.ts}' | /usr/local/bin/jq -s . -c > nissan_com_tw.json
+

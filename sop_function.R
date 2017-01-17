@@ -7,6 +7,9 @@ library(scales)
 library(reshape)
 library(reshape2)
 library(lazyeval)
+library(fasttime)
+library(data.table)
+library(rgeolocate)
 
 
 truncate_url<- function(df, colname_vector){
@@ -65,17 +68,17 @@ my_data_manipulate<- function(df){
   # generate country and region column
   # can only get the country of the ips I have; however, it's the best I can get for the time being.
   #https://cran.r-project.org/web/packages/rgeolocate/rgeolocate.pdf
-#  data_ip<-df %>% group_by(IP) %>% dplyr::summarise(count=n()) %>% select(c(1))
-#  file <- system.file("extdata","GeoLite2-City.mmdb", package = "rgeolocate")
-#  ip_list <- vector("list", nrow(data_ip))
-#  for(i in 1:dim(data_ip)[1]){
-#    ip_list[[i]] <- maxmind(as.character(data_ip$IP[i]), file, 
-#                            fields = c('country_name','region_name','city_name'))
-#  }
-#  ip_df <- plyr::rbind.fill(ip_list)
-#  data_ip<-cbind(data_ip,ip_df)
-#  df <- merge(df, data_ip, by.x=('IP'))
-  
+ # data_ip<-df %>% group_by(IP) %>% dplyr::summarise(count=n()) %>% select(c(1))
+ # file <- system.file("extdata","GeoLite2-City.mmdb", package = "rgeolocate")
+ # ip_list <- vector("list", nrow(data_ip))
+ # for(i in 1:dim(data_ip)[1]){
+ #   ip_list[[i]] <- maxmind(as.character(data_ip$IP[i]), file,
+ #                           fields = c('country_name','region_name','city_name'))
+ # }
+ # ip_df <- plyr::rbind.fill(ip_list)
+ # data_ip<-cbind(data_ip,ip_df)
+ # df <- merge(df, data_ip, by.x=('IP'))
+ #  
   return(df)
 }
 
@@ -245,14 +248,38 @@ my_session5<- function(df){
   return(steps)
 }
 
+my_session6<- function(df){
+  start<-Sys.time()
+  df <- as.data.table(df)
+  df<- df[order(df$clientId, df$actual_time),]
+  df[, session := cumsum(difftime(actual_time, shift(actual_time, fill = min(actual_time)), units = "mins") > 30) +1L, by = clientId]
+  
+  end<-Sys.time()
+  print(paste0("Started: ", start))
+  print(paste0("Ended: ", end))
+  print(difftime(end, start, Asia/Taipei,units = "mins"))
+  
+  df<-as.data.frame(df)
+  return(df)
+}
+
 set_column_type<- function(df){
   df$timeZone = as.numeric(df$timeZone)
   df$Time = as.integer(df$Time)
-  df$actual_time = as.POSIXct(df$actual_time)
+  df$actual_time = as.POSIXct(df$actual_time,tz="Asia/Taipei")
   df$actual_date = as.Date(df$actual_date)
   df$hour = as.numeric(df$hour)
   df$weekday = as.factor(df$weekday)
-  df$session = as.numeric(df$session)
+#  df$session = as.numeric(df$session)
+  df$weekday<-factor(df$weekday, levels=c('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'))
+  return(df)
+}
+
+set_column_type2<- function(df){
+  df$actual_time = fastPOSIXct(df$actual_time)
+  df$actual_date = as.Date(df$actual_date)
+  df$weekday = as.factor(df$weekday)
+#  df$session = as.numeric(df$session)
   df$weekday<-factor(df$weekday, levels=c('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'))
   return(df)
 }
@@ -357,7 +384,7 @@ my_data_summary<- function(df){
   page_per_session<-mean(data_8$page_count)
   
   
-  final_list<-list('人數'=id_count, '平均每日人數'=id_count/days,
+  final_list<-list('人數'=id_count, '平均每日人'=id_count/days,
                    '平均每人瀏覽頁數'=page_per_id, '總工作階段'=session_total,'平均每人工作階段'=session_per_id,
                    '平均每人停留時間(分鐘)'=mins_per_id,'單次工作階段頁數'=page_per_session,'平均跳出'=bounce_rate
 #                    ,
@@ -380,7 +407,7 @@ my_user_time_plot<- function(df, time_dimension, fill_dimension, type, facet_or_
                "weekday"={
                  week_plot<-ggplot(data=time_plot, aes_string(time_dimension)) + geom_bar()+theme_bw()+
                    theme(axis.text.x = element_text(angle=45))+
-                   ggtitle("造訪人次-週")+theme_gray(base_family="STHeiti")+
+                   ggtitle("造訪人-")+theme_gray(base_family="STHeiti")+
                    theme(plot.title = element_text(color="#666666", face="bold", size=40, hjust=0))+
                    theme(axis.title.x = element_text(size = rel(1.8), angle = 00),axis.text=element_text(size=15))+
                    theme(axis.title.y = element_text(size = rel(1.8), angle = 90),axis.text=element_text(size=15))
@@ -427,7 +454,7 @@ my_user_time_plot<- function(df, time_dimension, fill_dimension, type, facet_or_
                "actual_date"={
                  day_plot<-ggplot(data=time_plot, aes_string(time_dimension)) + geom_bar(aes_string(fill=fill_dimension))+theme_bw()+
                    theme(axis.text.x = element_text(angle=45))+scale_x_date(date_minor_breaks = "1 day")+
-                   ggtitle("造訪人次-日")+theme_gray(base_family="STHeiti")+
+                   ggtitle("造-")+theme_gray(base_family="STHeiti")+
                    theme(plot.title = element_text(color="#666666", face="bold", size=40, hjust=0))+
                    theme(axis.title.x = element_text(size = rel(1.8), angle = 00),axis.text=element_text(size=15))+
                    theme(axis.title.y = element_text(size = rel(1.8), angle = 90),axis.text=element_text(size=15))
@@ -454,7 +481,7 @@ my_user_time_plot<- function(df, time_dimension, fill_dimension, type, facet_or_
                  week_plot<-ggplot(time_plot,aes_string(x=time_dimension, y='count',group = 1)) + 
                    geom_line(size=1.5, alpha=1/10, linetype='dashed')+ 
                    geom_smooth(span = 0.85,se = FALSE)+ 
-                   ggtitle('造訪人次-週')+
+                   ggtitle('-週')+
                    theme_gray(base_family="STHeiti")+
                    theme(plot.title = element_text(color="#666666", face="bold", size=40, hjust=0))+
                    xlab(time_dimension) + geom_text(aes(label=count, vjust=-0.5))
