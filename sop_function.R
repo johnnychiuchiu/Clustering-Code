@@ -12,23 +12,12 @@ library(data.table)
 library(rgeolocate)
 
 
-truncate_url<- function(df, colname_vector){
-  # truncate the utm part of the targeted colnames, such as currentURL, URL_Current & URL_Referrer
-  for(x in colname_vector){
-    df[,x]<-as.character(df[,x])
-    for(i in 1:length(df[,x])){
-      if(grepl("utm_medium",df[,x][i])){
-        df[,x][i]<-strsplit(df[,x][i],'\\?')[[1]][1]
-      }
-    }
-  }
+set_column_type3<- function(df){
+  df$actual_time = fastPOSIXct(df$actual_time)-28800
+  #df$actual_date = as.Date(df$actual_date) #character type of actual_data can be compare as well
   return(df)
 }
-remove_id<- function(df, id_vector){
-  df<- df %>% filter(!(clientId %in% id_vector))
-  return(df)
-}
-  
+
 my_data_manipulate<- function(df){
   # replace blank with NA
   df[df==""] <- NA
@@ -39,213 +28,32 @@ my_data_manipulate<- function(df){
   # deal with the time column
   df$actual_time<-as.POSIXct(as.numeric(as.character(df$Time)),origin="1970-01-01",tz="Asia/Taipei")
   df$actual_date<-as.Date(df$actual_time,'Asia/Taipei')
-  df$hour<-as.numeric(format(df$actual_time, "%H"))
-  df$weekday <- weekdays(df$actual_date)
-  df$weekday<-factor(df$weekday, 
-                     levels=c('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'))
-  
-  # generate the ad traffic column
-  # with UTM_Source, it usually means that are some kind of ad traffic, including email, urad, tagtoo...etc.
-  # For now, I only want filter out urad's traffic.
-#   df$AD_Yes.No<-ifelse(df$UTM_Medium %in% 'urad','1','0')
-#   df$AD_Yes.No<-as.numeric(df$AD_Yes.No)
-  
-  # generate the 廣or not column, 先不考慮歸因問題，ie只要點擊過廣告的
-#   data_adtraffic_id<-df %>% group_by(clientId) %>%  dplyr::summarise(Ad_traffic=max(AD_Yes.No))
-#   df<- merge(df, data_adtraffic_id, by.x='clientId')
-#   df$Ad_traffic[df$Ad_traffic==1]<-"Yes"
-#   df$Ad_traffic[df$Ad_traffic==0]<-"No"
-  
-  # generate the New User_Member Column
-#   data_member<- df %>% group_by(clientId) %>% dplyr::summarise(Member_Status=max(as.integer(User_Member)))
-#   df<- merge(df, data_member, by.x='clientId')
-#   df$Member_Status[df$Member_Status==1]<-"Yes"
-#   df$Member_Status[df$Member_Status==0]<-"No"
-  
-  # truncate the utm part of the targeted colnames, such as currentURL, URL_Current & URL_Referrer
-#  df<-truncate_url(df, c('currentURL','URL_Current','URL_Referrer'))
+  #  df$hour<-as.numeric(format(df$actual_time, "%H"))
+  #  df$weekday <- weekdays(df$actual_date)
+  #  df$weekday<-factor(df$weekday, 
+  #                     levels=c('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'))
   
   # generate country and region column
   # can only get the country of the ips I have; however, it's the best I can get for the time being.
   #https://cran.r-project.org/web/packages/rgeolocate/rgeolocate.pdf
- # data_ip<-df %>% group_by(IP) %>% dplyr::summarise(count=n()) %>% select(c(1))
- # file <- system.file("extdata","GeoLite2-City.mmdb", package = "rgeolocate")
- # ip_list <- vector("list", nrow(data_ip))
- # for(i in 1:dim(data_ip)[1]){
- #   ip_list[[i]] <- maxmind(as.character(data_ip$IP[i]), file,
- #                           fields = c('country_name','region_name','city_name'))
- # }
- # ip_df <- plyr::rbind.fill(ip_list)
- # data_ip<-cbind(data_ip,ip_df)
- # df <- merge(df, data_ip, by.x=('IP'))
- #  
-  return(df)
-}
-
-my_session<- function(df){
-  start<-Sys.time()
-  clientid_count=data.frame(id=unique(df$clientId),session_count=1)
+  # data_ip<-df %>% group_by(IP) %>% dplyr::summarise(count=n()) %>% select(c(1))
+  # file <- system.file("extdata","GeoLite2-City.mmdb", package = "rgeolocate")
+  # ip_list <- vector("list", nrow(data_ip))
+  # for(i in 1:dim(data_ip)[1]){
+  #   ip_list[[i]] <- maxmind(as.character(data_ip$IP[i]), file,
+  #                           fields = c('country_name','region_name','city_name'))
+  # }
+  # ip_df <- plyr::rbind.fill(ip_list)
+  # data_ip<-cbind(data_ip,ip_df)
+  # df <- merge(df, data_ip, by.x=('IP'))
   
-  clientid_df<-list()
-  mydf_clientid<-data.frame()
+  # 產生 clientId 欄位
+  df$clientId <- df$gid
+  df$clientId <- ifelse(is.na(df$clientId), df$fid, df$clientId)
+  df$clientId <- ifelse(is.na(df$clientId), df$cid, df$clientId)
   
-  for(i in 1:length(clientid_count$id)){
-    print(i)
-    mydf_clientid <-df %>% filter(clientId==clientid_count$id[i]) %>% arrange(clientId,actual_time)
-    clientid_df[[i]]<-mydf_clientid
-    #print(i)
-  }
-  rm(mydf_clientid)
-  
-  #for each clientid_df
-  for(i in 1:length(clientid_df)){
-    paste('session, id:',i)
-    #if the clientid count's id match clientid_df's id, then we can generate the session column for that clientid
-    for(k in 1:dim(clientid_df[[i]])[1]){
-      #The first if statement
-      if(k==1){
-        clientid_df[[i]]$session[k]<-clientid_count$session_count[i]
-        clientid_count$session_count[i]<-clientid_count$session_count[i]+1
-      }else{
-        #The second if statement
-        if(as.numeric(difftime(clientid_df[[i]]$actual_time[k], 
-                               clientid_df[[i]]$actual_time[k-1], Asia/Taipei,units = "mins"))>30){
-          clientid_df[[i]]$session[k]<-clientid_count$session_count[i]
-          clientid_count$session_count[i]<-clientid_count$session_count[i]+1
-        }else{
-          clientid_df[[i]]$session[k]<-clientid_count$session_count[i]-1
-        }
-      }
-    }
-  }
-  df<-rbind_all(clientid_df)
-  
-  end<-Sys.time()
-  print(paste0("Started: ", start))
-  print(paste0("Ended: ", end))
-  difftime(end, start, Asia/Taipei,units = "mins") 
   
   return(df)
-}
-
-my_session2<- function(df){
-  start<-Sys.time()
-  clientid_count=data.frame(id=unique(df$clientId),session_count=1)
-  
-  df$session<- NA
-  #for each clientid_df
-  for(i in 1:length(unique(df$clientId))){
-    print(paste('session, id:',i))
-    #if the clientid count's id match clientid_df's id, then we can generate the session column for that clientid
-    for(k in 1:dim(df[df$clientId==unique(df$clientId)[i],])[1]){
-      #The first if statement
-      if(k==1){
-        df[df$clientId==unique(df$clientId)[i],][['session']][k] <- clientid_count$session_count[i]
-        clientid_count$session_count[i] = clientid_count$session_count[i]+1
-      }else{
-        #The second if statement
-        if(as.numeric(difftime(df[df$clientId==unique(df$clientId)[i],][['actual_time']][k], 
-                               df[df$clientId==unique(df$clientId)[i],][['actual_time']][k-1], Asia/Taipei,units = "mins"))>30){
-          df[df$clientId==unique(df$clientId)[i],][['session']][k] = clientid_count$session_count[i]
-          clientid_count$session_count[i] = clientid_count$session_count[i]+1
-        }else{
-          df[df$clientId==unique(df$clientId)[i],][['session']][k] = clientid_count$session_count[i]-1
-        }
-      }
-    }
-  }
-  
-  
-  
-  end<-Sys.time()
-  print(paste0("Started: ", start))
-  print(paste0("Ended: ", end))
-  difftime(end, start, Asia/Taipei,units = "mins") 
-  
-  return(df)
-}
-
-my_session3<- function(df){
-  steps<- df[order(df$clientId, df$actual_time),]
-  for (i in 1:(dim(steps)[1]-1)){
-    print(paste('for 1, id:',i))
-    if (steps$clientId[i]!=steps$clientId[i+1]){
-      steps$sec.[i]<- 0	}
-    else{steps$sec.[i]<- abs(steps$actual_time[i]-steps$actual_time[i+1])}
-  }
-  
-  steps$session<- 1
-  for (i in 1:(dim(steps)[1]-1)){
-    print(paste('for 2, id:',i))
-    if (steps$clientId[i]==steps$clientId[i+1]){
-      if (steps$sec.[i]>1800){
-        steps$session[i+1]<- steps$session[i]+1
-      }
-      else{steps$session[i+1]<- steps$session[i]}
-    }
-  }
-  
-  for (i in 1:dim(steps)[1]){
-    print(paste('for 3, id:',i))
-    if (steps$sec.[i]>1800){
-      steps$sec.session[i]<- 0
-    }
-    else{steps$sec.session[i]<-steps$sec.[i]}
-  }
-  
-}
-
-my_session4<- function(df){
-  start<-Sys.time()
-  
-  steps<- df[order(df$clientId, df$actual_time),]
-  steps$session<- 1
-  
-  for (i in 2:(dim(steps)[1])){
-    print(paste('row: ',i))
-    if (steps$clientId[i]==steps$clientId[i-1]){
-      if(as.numeric(difftime(steps$actual_time[i], 
-                            steps$actual_time[i-1], Asia/Taipei,units = "mins"))>30){
-        steps$session[i]<- steps$session[i-1]+1
-      }
-      else{steps$session[i]<- steps$session[i-1]}
-    }
-  }
-  
-  end<-Sys.time()
-  print(paste0("Started: ", start))
-  print(paste0("Ended: ", end))
-  difftime(end, start, Asia/Taipei,units = "mins") 
-  
-  return(steps)
-}
-
-my_session5<- function(df){
-  start<-Sys.time()
-  
-  steps<- df[order(df$clientId, df$actual_time),]
-  if(!('session' %in% colnames(steps))){
-    steps$session<- 1
-  }
-  
-  for (i in 2:(dim(steps)[1])){
-    #print(paste('row: ',i))
-    if(is.na(steps$session[i])){
-      if (steps$clientId[i]==steps$clientId[i-1]){
-        if(as.numeric(difftime(steps$actual_time[i], 
-                               steps$actual_time[i-1], Asia/Taipei,units = "mins"))>30){
-          steps$session[i]<- steps$session[i-1]+1
-        }else{steps$session[i]<- steps$session[i-1]}
-      }else{steps$session[i]<- 1}
-    }
-  }
-  
-  end<-Sys.time()
-  print(paste0("Started: ", start))
-  print(paste0("Ended: ", end))
-  difftime(end, start, Asia/Taipei,units = "mins") 
-  
-  return(steps)
 }
 
 my_session6<- function(df){
@@ -261,6 +69,193 @@ my_session6<- function(df){
   
   df<-as.data.frame(df)
   return(df)
+}
+
+
+####################################
+
+truncate_url<- function(df, colname_vector){
+  # truncate the utm part of the targeted colnames, such as currentURL, URL_Current & URL_Referrer
+  for(x in colname_vector){
+    df[,x]<-as.character(df[,x])
+    for(i in 1:length(df[,x])){
+      if(grepl("utm_medium",df[,x][i])){
+        df[,x][i]<-strsplit(df[,x][i],'\\?')[[1]][1]
+      }
+    }
+  }
+  return(df)
+}
+
+remove_id<- function(df, id_vector){
+  df<- df %>% filter(!(clientId %in% id_vector))
+  return(df)
+}
+
+my_session<- function(df){
+  start<-Sys.time()
+  clientid_count=data.frame(id=unique(df$clientId),session_count=1)
+
+  clientid_df<-list()
+  mydf_clientid<-data.frame()
+
+  for(i in 1:length(clientid_count$id)){
+    print(i)
+    mydf_clientid <-df %>% filter(clientId==clientid_count$id[i]) %>% arrange(clientId,actual_time)
+    clientid_df[[i]]<-mydf_clientid
+    #print(i)
+  }
+  rm(mydf_clientid)
+
+  #for each clientid_df
+  for(i in 1:length(clientid_df)){
+    paste('session, id:',i)
+    #if the clientid count's id match clientid_df's id, then we can generate the session column for that clientid
+    for(k in 1:dim(clientid_df[[i]])[1]){
+      #The first if statement
+      if(k==1){
+        clientid_df[[i]]$session[k]<-clientid_count$session_count[i]
+        clientid_count$session_count[i]<-clientid_count$session_count[i]+1
+      }else{
+        #The second if statement
+        if(as.numeric(difftime(clientid_df[[i]]$actual_time[k],
+                               clientid_df[[i]]$actual_time[k-1], Asia/Taipei,units = "mins"))>30){
+          clientid_df[[i]]$session[k]<-clientid_count$session_count[i]
+          clientid_count$session_count[i]<-clientid_count$session_count[i]+1
+        }else{
+          clientid_df[[i]]$session[k]<-clientid_count$session_count[i]-1
+        }
+      }
+    }
+  }
+  df<-rbind_all(clientid_df)
+
+  end<-Sys.time()
+  print(paste0("Started: ", start))
+  print(paste0("Ended: ", end))
+  difftime(end, start, Asia/Taipei,units = "mins")
+
+  return(df)
+}
+
+my_session2<- function(df){
+  start<-Sys.time()
+  clientid_count=data.frame(id=unique(df$clientId),session_count=1)
+
+  df$session<- NA
+  #for each clientid_df
+  for(i in 1:length(unique(df$clientId))){
+    print(paste('session, id:',i))
+    #if the clientid count's id match clientid_df's id, then we can generate the session column for that clientid
+    for(k in 1:dim(df[df$clientId==unique(df$clientId)[i],])[1]){
+      #The first if statement
+      if(k==1){
+        df[df$clientId==unique(df$clientId)[i],][['session']][k] <- clientid_count$session_count[i]
+        clientid_count$session_count[i] = clientid_count$session_count[i]+1
+      }else{
+        #The second if statement
+        if(as.numeric(difftime(df[df$clientId==unique(df$clientId)[i],][['actual_time']][k],
+                               df[df$clientId==unique(df$clientId)[i],][['actual_time']][k-1], Asia/Taipei,units = "mins"))>30){
+          df[df$clientId==unique(df$clientId)[i],][['session']][k] = clientid_count$session_count[i]
+          clientid_count$session_count[i] = clientid_count$session_count[i]+1
+        }else{
+          df[df$clientId==unique(df$clientId)[i],][['session']][k] = clientid_count$session_count[i]-1
+        }
+      }
+    }
+  }
+
+
+
+  end<-Sys.time()
+  print(paste0("Started: ", start))
+  print(paste0("Ended: ", end))
+  difftime(end, start, Asia/Taipei,units = "mins")
+
+  return(df)
+}
+
+my_session3<- function(df){
+  steps<- df[order(df$clientId, df$actual_time),]
+  for (i in 1:(dim(steps)[1]-1)){
+    print(paste('for 1, id:',i))
+    if (steps$clientId[i]!=steps$clientId[i+1]){
+      steps$sec.[i]<- 0	}
+    else{steps$sec.[i]<- abs(steps$actual_time[i]-steps$actual_time[i+1])}
+  }
+
+  steps$session<- 1
+  for (i in 1:(dim(steps)[1]-1)){
+    print(paste('for 2, id:',i))
+    if (steps$clientId[i]==steps$clientId[i+1]){
+      if (steps$sec.[i]>1800){
+        steps$session[i+1]<- steps$session[i]+1
+      }
+      else{steps$session[i+1]<- steps$session[i]}
+    }
+  }
+
+  for (i in 1:dim(steps)[1]){
+    print(paste('for 3, id:',i))
+    if (steps$sec.[i]>1800){
+      steps$sec.session[i]<- 0
+    }
+    else{steps$sec.session[i]<-steps$sec.[i]}
+  }
+
+}
+
+my_session4<- function(df){
+  start<-Sys.time()
+
+  steps<- df[order(df$clientId, df$actual_time),]
+  steps$session<- 1
+
+  for (i in 2:(dim(steps)[1])){
+    print(paste('row: ',i))
+    if (steps$clientId[i]==steps$clientId[i-1]){
+      if(as.numeric(difftime(steps$actual_time[i],
+                            steps$actual_time[i-1], Asia/Taipei,units = "mins"))>30){
+        steps$session[i]<- steps$session[i-1]+1
+      }
+      else{steps$session[i]<- steps$session[i-1]}
+    }
+  }
+
+  end<-Sys.time()
+  print(paste0("Started: ", start))
+  print(paste0("Ended: ", end))
+  difftime(end, start, Asia/Taipei,units = "mins")
+
+  return(steps)
+}
+
+my_session5<- function(df){
+  start<-Sys.time()
+
+  steps<- df[order(df$clientId, df$actual_time),]
+  if(!('session' %in% colnames(steps))){
+    steps$session<- 1
+  }
+
+  for (i in 2:(dim(steps)[1])){
+    #print(paste('row: ',i))
+    if(is.na(steps$session[i])){
+      if (steps$clientId[i]==steps$clientId[i-1]){
+        if(as.numeric(difftime(steps$actual_time[i],
+                               steps$actual_time[i-1], Asia/Taipei,units = "mins"))>30){
+          steps$session[i]<- steps$session[i-1]+1
+        }else{steps$session[i]<- steps$session[i-1]}
+      }else{steps$session[i]<- 1}
+    }
+  }
+
+  end<-Sys.time()
+  print(paste0("Started: ", start))
+  print(paste0("Ended: ", end))
+  difftime(end, start, Asia/Taipei,units = "mins")
+
+  return(steps)
 }
 
 set_column_type<- function(df){
@@ -284,28 +279,27 @@ set_column_type2<- function(df){
   return(df)
 }
 
-
 my_newold<- function(df){
   # generate the 新舊訪客
   data_newold<-df %>% group_by(actual_date,clientId) %>% dplyr::summarise(count =n(),minsession=min(session))
   data_newold$newold<-ifelse(data_newold$minsession!=1,'old','new')
   data_newold<- data_newold %>% select(actual_date, clientId, newold)
   #data_newold$actual_date<- as.character(data_newold$actual_date)
-  
+
   #df$actual_date<- as.character(df$actual_date)
   df<- merge(df, data_newold, by =c('actual_date','clientId'), all.x = TRUE)
-  
+
   return(df)
-  
+
 }
 
 my_count_revenue<- function(df){
   # - 總營收
   data_6_1_id<- df %>% filter(Event == 'Complete_Shopping') %>% select(clientId)
   data_6_1_id<- data_6_1_id$clientId
-  data_6_2<- df %>% filter(Event %in% c('Complete_Shopping','Checkout3_Payment','Cart')) %>% 
+  data_6_2<- df %>% filter(Event %in% c('Complete_Shopping','Checkout3_Payment','Cart')) %>%
     filter(clientId %in% data_6_1_id) %>% arrange(desc(clientId), actual_time)
-  
+
   data_6_3<- data.frame()
   for(i in 1:dim(data_6_2)[1]){
     if(data_6_2$Event[i]=='Complete_Shopping'){
@@ -332,7 +326,7 @@ my_count_revenue<- function(df){
       }
     }
   }
-  
+
   data_6_3$Price <-sapply(strsplit(data_6_3$Price, split='M', fixed=TRUE), function(x) (x[2]))
   data_6_3$Price <-as.numeric(data_6_3$Price)
   return(data_6_3)
@@ -352,7 +346,7 @@ my_data_summary<- function(df){
   data_2<-df %>% group_by(clientId) %>% dplyr::summarize(clieitid_session=max(session))
   session_total<-sum(data_2$clieitid_session)
   
-  # - 平均工作
+  # - 平
   session_per_id<-mean(data_2$clieitid_session)
   
   # - 平均停留時間
@@ -425,7 +419,7 @@ my_user_time_plot<- function(df, time_dimension, fill_dimension, type, facet_or_
                "hour"={
                  hour_plot<-ggplot(data=time_plot, aes_string(time_dimension)) + geom_bar()+theme_bw()+
                    theme(axis.text.x = element_text(angle=45))+
-                   ggtitle("造訪人次-小時")+theme_gray(base_family="STHeiti")+
+                   ggtitle("造訪人次-小")+theme_gray(base_family="STHeiti")+
                    theme(plot.title = element_text(color="#666666", face="bold", size=40, hjust=0))+
                    theme(axis.title.x = element_text(size = rel(1.8), angle = 00),axis.text=element_text(size=15))+
                    theme(axis.title.y = element_text(size = rel(1.8), angle = 90),axis.text=element_text(size=15))
@@ -528,7 +522,7 @@ my_user_time_plot<- function(df, time_dimension, fill_dimension, type, facet_or_
                  hour_plot<-ggplot(time_plot,aes_string(x=time_dimension, y='count')) + 
                    geom_line(size=1.5, alpha=1/10, linetype='dashed')+ 
                    geom_smooth(span = 0.5,se = FALSE)+ 
-                   ggtitle('造訪人次-小時')+
+                   ggtitle('-')+
                    theme_gray(base_family="STHeiti")+
                    theme(plot.title = element_text(color="#666666", face="bold", size=40, hjust=0))+
                    xlab(time_dimension) + geom_text(aes(label=count, vjust=-0.5))+
@@ -555,7 +549,7 @@ my_user_time_plot<- function(df, time_dimension, fill_dimension, type, facet_or_
                    geom_line(size=1.5, alpha=1/10, linetype='dashed')+ 
                    geom_smooth(span = 1,se = FALSE)+ 
                    theme_bw()+
-                   #ggtitle(paste("造訪人次-週:",fill_dimension))+
+                   #ggtitle(paste("造訪人-:",fill_dimension))+
                    #theme_gray(base_family="STHeiti")+
                    #theme(plot.title = element_text(color="#666666", face="bold", size=40, hjust=0))+
                    xlab(time_dimension) + geom_text(aes(label=count, vjust=-0.5),size=6)+
@@ -960,7 +954,6 @@ my_replace_name<- function(df ,name_df, from_language, column_name){
   
   return(df)
 }
-
 
 my_top_product<- function(my_count_revenue_df){
   hot_df<- my_count_revenue_df %>% group_by(Title) %>% 
