@@ -3,7 +3,6 @@ print(paste('cluster.R start:',Sys.time()))
 allstart<-Sys.time()
 
 setwd('/Users/JohnnyChiu/Desktop/MyFiles/2017_projects/coding/0217_nissan_interest_generator')
-eval(parse("sop_function.R", encoding="UTF-8"))
 eval(parse("cluster_function.R", encoding="UTF-8"))
 Sys.setlocale("LC_ALL", "UTF-8")
 
@@ -18,19 +17,19 @@ mydata<-fread('tail -2000000 final_nissan.csv',
                           'UTM_Source','UTM_Medium','UTM_Term','UTM_Content',
                           'UTM_Compaign','userAgent','IP','Time','actual_time',
                           'actual_date','clientId'))
-mydata<-set_column_type3(mydata)
+mydata<-set_column_type(mydata)
 
-##### 把當日新的資料讀進來
+##### 把當天新的資料讀進來
 myjson<-jsonlite::fromJSON(paste('_data/nissan_flat_',format(Sys.Date(),'%y%m%d'),'/nissan_com_tw.json',sep=''), flatten = TRUE)
 myjson<-my_data_manipulate(myjson)
 # myjson<-as.data.table(myjson)
 
 ##### 把當天的資料併回本來的 csv 裡頭
-write.table(myjson, file='final_nissan.csv',row.names = FALSE, col.names = FALSE, append= TRUE, sep=',')
+# write.table(myjson, file='final_nissan.csv',row.names = FALSE, col.names = FALSE, append= TRUE, sep=',')
 
 ##### 把資料合併，並且產生 session 欄位
 mydata2 <- rbind.fill(mydata,myjson)
-mydata3 <- my_session6(mydata2)
+mydata3 <- my_session(mydata2)
 
 print('mydata finished')
 
@@ -41,27 +40,27 @@ print('mydata finished')
 ##################################### 產生clustering 用的data frame：根據不同的事件，給予不同的權重
 
 ##### 1 * Event: page car、、page car停留時間
-cluster_df_1<-my_reshape2(mydata3, filter_argument = "Event=='Page_Car'", reshape_column = 'car', multiple_factor=1)
+cluster_df_1<-my_reshape(mydata3, filter_argument = "Event=='Page_Car'", reshape_column = 'car', multiple_factor=1)
 
 ##### 3 * 下載型錄
-cluster_df_3<-my_reshape2(mydata3, filter_argument = "Event=='Click_Car_DownLoad'", reshape_column = 'car', multiple_factor=3)
+cluster_df_3<-my_reshape(mydata3, filter_argument = "Event=='Click_Car_DownLoad'", reshape_column = 'car', multiple_factor=3)
 
 ##### 3 * 觀看詳細規格Page_Car_Spec”, type
 mydata3_temp <- mydata3 %>% filter(Event=='Page_Car_Spec') 
 mydata3_temp$car[is.na(mydata3_temp$car)] <- mydata3_temp$type[is.na(mydata3_temp$car)]
-cluster_df_4<-my_reshape2(mydata3_temp, filter_argument = "Event=='Page_Car_Spec'", reshape_column = 'car', multiple_factor=3)
+cluster_df_4<-my_reshape(mydata3_temp, filter_argument = "Event=='Page_Car_Spec'", reshape_column = 'car', multiple_factor=3)
 
 ##### 5 * 購車試算, car
-cluster_df_5<-my_reshape2(mydata3, filter_argument = "type=='購車試算_試算結果'", reshape_column = 'car', multiple_factor=5)
+cluster_df_5<-my_reshape(mydata3, filter_argument = "type=='購車試算_試算結果'", reshape_column = 'car', multiple_factor=5)
 
 ##### 5 * Click_Car_Build_2_Choose, car
-cluster_df_6<-my_reshape2(mydata3, filter_argument = "Event=='Click_Car_Build_2_Choose'", reshape_column = 'car', multiple_factor=5)
+cluster_df_6<-my_reshape(mydata3, filter_argument = "Event=='Click_Car_Build_2_Choose'", reshape_column = 'car', multiple_factor=5)
 
 ##### 8 * 選 Page_TestDrive_PC_Chosen, car
-cluster_df_7<-my_reshape2(mydata3, filter_argument = "Event=='Page_TestDrive_PC_Chosen'", reshape_column = 'car', multiple_factor=8)
+cluster_df_7<-my_reshape(mydata3, filter_argument = "Event=='Page_TestDrive_PC_Chosen'", reshape_column = 'car', multiple_factor=8)
 
 ##### 10 * 預約試乘
-cluster_df_8<-my_reshape2(mydata3, filter_argument = "Event=='TestDrive_Submit_Click'", reshape_column = 'car', multiple_factor=10)
+cluster_df_8<-my_reshape(mydata3, filter_argument = "Event=='TestDrive_Submit_Click'", reshape_column = 'car', multiple_factor=10)
 
 ##### 合併
 cluster_df<-plyr::rbind.fill(cluster_df_1,cluster_df_3,cluster_df_4,cluster_df_5,cluster_df_6,cluster_df_7,cluster_df_8)
@@ -79,7 +78,7 @@ print('cluster_df finished')
 
 ##### 把汽車和汽車類型 mapping 起來
 car_type_df<- data.frame(model=c('TIIDA','NEW MARCH','ALL NEW LIVINA','BIG TIIDA','SUPER SENTRA','SENTRA aero','ALL NEW TEANA','BIG TIIDA Turbo','X-TRAIL','JUKE','MURANO','370Z','GT-R'),                             
-						type=c('轎車','','轎車,休旅車','轎車','轎車','轎車','轎車','轎車','休旅車','休旅車,進口車','休旅車,進口車',
+						type=c('轎車','轎車','轎車,休旅車','轎車','轎車','轎車','','轎車','休旅車','休旅車,進口車','休旅車,進口車',
                                  '跑車,進口車','跑車,進口車'))
 type_cluster_df<- cluster_mapping(cluster_df, car_type_df)
 
@@ -100,18 +99,18 @@ km.type_cluster_df.scaled.cluster<-my_cluster_df(type_cluster_df, type_cluster_d
 km.type_cluster_df.scaled.cluster.filter<-my_cluster_filter(km.type_cluster_df.scaled.cluster, 0.7)
 
 ##### merge back the cluster
-km.final_cluster_2<-my_cluster_merge_back2(my_reshape=type_cluster_df, km.object=kmeans.km_2)
+km.final_cluster_2<-my_cluster_merge_back(my_reshape=type_cluster_df, km.object=kmeans.km_2)
 cluster_name<-cluster_name_table(km.type_cluster_df.scaled.cluster.filter,0.7)
 km.final_cluster_2<-my_cluster_name(km.final_cluster_2,cluster_name)
 
-##### 把汽車類型分群的結果，限制在下面這五種裡面，以防日後越分越多群，介面上會很亂
+##### 把汽車類型分群的結果，限制在下面這五種裡面，以防日後
 fix_cluster_name = c('對「休旅車 & 轎車」感興趣的族群','對「休旅車 & 進口車」感興趣的族群',
-                     '對「休旅車」感','對「跑車 & 進口車」感興趣的族群',
-                     '對「轎車」感興趣的族群')
+                     '對「休旅車」感興趣的族群','對「跑車 & 進口車」感興趣的族群',
+                     '對')
 km.final_cluster_2<- km.final_cluster_2 %>% filter(cluster %in% fix_cluster_name)
 print('type mapping finished')
 
-##### 產生最終要輸出的資
+##### 產生最終要輸出的資料
 x = mydata3 %>% filter(clientId %in% km.final_cluster_2$clientId) %>% select(clientId, fid, cid, gid, actual_date)
 x = merge(x, km.final_cluster_2, by ='clientId', all.x = TRUE)
 x$methodName<-'product intent clustering'
@@ -126,7 +125,7 @@ print('依照汽車類型做分群 finished')
 
 
 ################################################################################
-##################################### 依照對網站感興趣的程度
+##################################### 依照對網站感興趣的程度做分群
 
 ##### 計算每個 id 的網站總停留時間
 my_session_time<-mydata3 %>% dplyr::group_by(clientId, session) %>% 
@@ -135,7 +134,7 @@ my_session_time<-mydata3 %>% dplyr::group_by(clientId, session) %>%
   dplyr::summarize(total_time=sum(session_duration)) %>% 
   mutate(total_mins=total_time/60,total_hours=total_time/60/60) 
 
-##### 依照計算出來的網站總停留時間百分比：(0, 網站總停留時間 50 百分位數, 網站 75 百分位數, Inf)，把 ID 分為輕、中、高度興趣族群
+##### 依照計算出來的網站總停留時間百分比：(0, 網站總停留時間 50 百分位數, 網站總停留時間 75 百分位數, Inf)，把 ID 分為輕、中、高度興趣族群
 my_session_time$Interest <- cut(my_session_time$total_mins, 
                                 breaks = c(0,as.numeric(quantile(my_session_time$total_mins,0.5)),
                                            as.numeric(quantile(my_session_time$total_mins,0.75)),Inf), 
@@ -167,9 +166,8 @@ km.final_cluster_3 <- data.frame(
 )
 km.final_cluster_3$cluster = paste('對「',km.final_cluster_3$cluster,'」感興趣的族群',sep='')
 
-##### 產
+##### 產生最終要輸出的資料
 z = mydata3 %>% filter(clientId %in% km.final_cluster_3$clientId) %>% select(clientId, fid, cid, gid, actual_date)
-
 z = merge(z, km.final_cluster_3, by ='clientId', all.x = TRUE)
 z$methodName<-'product intent clustering'
 colnames(z)[which(names(z) == "cluster")] <- "groupName"
@@ -182,7 +180,7 @@ print('依照對單一車種感興趣的程度做分群 finished')
 
 
 ################################################################################
-##################################### 輸出最終 post 到 dmp 介面的 json 檔案
+##################################### 輸出最終要拿來 post 到 dmp 介面的 json 檔案
 
 #### output today's result
 x_today=x %>% filter(actual_date == Sys.Date()-1)
@@ -314,13 +312,13 @@ difftime(allend, allstart, Asia/Taipei,units = "mins")
 # ############### merge back the cluster and filter out the clientid that does show up for more than 90 days.
 # ############### For the user with only one event, we only keep them for 7 days
 # #km.final_cluster_2<-my_cluster_merge_back(original_df=mydata, my_reshape=type_cluster_df, km.object=kmeans.km_2, 1000, 1000)
-# km.final_cluster_3<-my_cluster_merge_back2(my_reshape=cluster_df, km.object=kmeans.km_3)
+# km.final_cluster_3<-my_cluster_merge_back(my_reshape=cluster_df, km.object=kmeans.km_3)
 # cluster_name<-cluster_name_table(km.cluster_df.scaled.cluster.filter,0.7)
 # km.final_cluster_3<-my_cluster_name(km.final_cluster_3,cluster_name)
 # 
 # fix_cluster_name = c('對「370Z」感興趣的族群','對「ALL NEW LIVINA」感興趣的族群','對「ALL NEW TEANA」感興趣的族群',
 #                      '對「BIG TIIDA & TIIDA」感興趣的族群','對「BIG TIIDA Turbo」感興趣的族群','對「BIG TIIDA」感興趣的族群',
-#                      '對「GT-R」感興趣的族群','對「JUKE」感興趣的族群','對「MURANO」感興趣的族群','對「NEW MARCH',
+#                      '對「GT-R」感興趣的族群','對「JUKE」感興趣的族群','對「MURANO」感興趣的族群','對「NEW MARCH」感興趣的族群',
 #                      '對「SENTRA aero」感興趣的族群','對「SUPER SENTRA」感興趣的族群','對「TIIDA」感興趣的族群','對「X-TRAIL」感興趣的族群')
 # km.final_cluster_3<- km.final_cluster_3 %>% filter(cluster %in% fix_cluster_name)
 # 
