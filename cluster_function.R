@@ -6,7 +6,8 @@ library(fasttime)
 library(scales)
 library(reshape)
 library(data.table)
-library(rgeolocate)
+# library(rgeolocate)
+library(tidyr)
 
 set_column_type<- function(df){
   df$actual_time = fastPOSIXct(df$actual_time)-28800
@@ -182,7 +183,7 @@ cluster_name_table<- function(my_cluster_filter, threshold){
 }
 
 my_cluster_name<- function(final_cluster,cluster_name){
-  #  final_cluster cluster的值，取代為cluster_name_table裡頭的文字，並且加上頭跟尾（對「xxx」感興趣的族群）
+  # 把本來 final_cluster cluster的值，取代為cluster_name_table裡頭的文字，並且加上頭跟尾（對「xxx」感興趣的族群）
   
   for(i in 1:length(unique(final_cluster$cluster))){
     if(!is.null(cluster_name[[i]])){
@@ -191,5 +192,3 @@ my_cluster_name<- function(final_cluster,cluster_name){
   }
   return(final_cluster)
 }
-
-

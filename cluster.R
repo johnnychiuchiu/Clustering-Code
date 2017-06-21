@@ -10,7 +10,7 @@ Sys.setlocale("LC_ALL", "UTF-8")
 ##################################### read data
 
 ##### 讀取csv檔案中最後2,000,000筆資料
-mydata<-fread('tail -2000000 final_nissan.csv',
+mydata<-fread('tail -1000000 final_nissan.csv',
               colClasses=c(rep("character",21)),
               col.names=c('cid','fid','gid','screenResolution','language',
                           'Event','car','type','URL_Current','URL_Referrer',
@@ -19,13 +19,14 @@ mydata<-fread('tail -2000000 final_nissan.csv',
                           'actual_date','clientId'))
 mydata<-set_column_type(mydata)
 
+
 ##### 把當天新的資料讀進來
-myjson<-jsonlite::fromJSON(paste('_data/nissan_flat_',format(Sys.Date(),'%y%m%d'),'/nissan_com_tw.json',sep=''), flatten = TRUE)
+myjson<-jsonlite::fromJSON(paste('./daily_json_temp/nissan_com_tw_',format(Sys.Date()-2,'%Y%m%d'),'.json',sep=''), flatten = TRUE)
 myjson<-my_data_manipulate(myjson)
 # myjson<-as.data.table(myjson)
 
 ##### 把當天的資料併回本來的 csv 裡頭
-# write.table(myjson, file='final_nissan.csv',row.names = FALSE, col.names = FALSE, append= TRUE, sep=',')
+write.table(myjson, file='final_nissan.csv',row.names = FALSE, col.names = FALSE, append= TRUE, sep=',')
 
 ##### 把資料合併，並且產生 session 欄位
 mydata2 <- rbind.fill(mydata,myjson)
@@ -67,7 +68,7 @@ cluster_df<-plyr::rbind.fill(cluster_df_1,cluster_df_3,cluster_df_4,cluster_df_5
 cluster_df[is.na(cluster_df)] <- 0
 cluster_df<-cluster_df %>% dplyr::group_by(clientId) %>% dplyr::summarise_each(funs(sum))
 
-##### 做一些欄位篩選，有的欄位不應該出現，如：ALL NEWティアナ
+##### 做一些欄位篩選，有的欄位不應該出ALL NEWティアナ
 cluster_df <- cluster_df %>% dplyr::select(`clientId`, `370Z`, `ALL NEW LIVINA`, `ALL NEW TEANA`, `BIG TIIDA`, `BIG TIIDA Turbo`, `JUKE`, `MURANO`, `NEW MARCH`, `SENTRA aero`, `SUPER SENTRA`, `TIIDA`,`X-TRAIL`,`GT-R`)
 
 print('cluster_df finished')
@@ -78,7 +79,7 @@ print('cluster_df finished')
 
 ##### 把汽車和汽車類型 mapping 起來
 car_type_df<- data.frame(model=c('TIIDA','NEW MARCH','ALL NEW LIVINA','BIG TIIDA','SUPER SENTRA','SENTRA aero','ALL NEW TEANA','BIG TIIDA Turbo','X-TRAIL','JUKE','MURANO','370Z','GT-R'),                             
-						type=c('轎車','轎車','轎車,休旅車','轎車','轎車','轎車','','轎車','休旅車','休旅車,進口車','休旅車,進口車',
+						type=c('轎車','轎車','轎車,休旅車','轎車','轎車','轎車','轎車','轎車','休旅車','休旅車,進口車','休旅車,進口車',
                                  '跑車,進口車','跑車,進口車'))
 type_cluster_df<- cluster_mapping(cluster_df, car_type_df)
 
@@ -103,7 +104,7 @@ km.final_cluster_2<-my_cluster_merge_back(my_reshape=type_cluster_df, km.object=
 cluster_name<-cluster_name_table(km.type_cluster_df.scaled.cluster.filter,0.7)
 km.final_cluster_2<-my_cluster_name(km.final_cluster_2,cluster_name)
 
-##### 把汽車類型分群的結果，限制在下面這五種裡面，以防日後
+##### 把汽車類型分群的結果，限制在下面這五種裡面，以防日後越分
 fix_cluster_name = c('對「休旅車 & 轎車」感興趣的族群','對「休旅車 & 進口車」感興趣的族群',
                      '對「休旅車」感興趣的族群','對「跑車 & 進口車」感興趣的族群',
                      '對')
@@ -142,7 +143,7 @@ my_session_time$Interest <- cut(my_session_time$total_mins,
                                 right = FALSE) 
 my_session_time<- my_session_time %>% dplyr::select(clientId,Interest)
 
-# 產生最終要輸出的資料
+# 產生最終要輸出的資
 y = mydata3 %>% filter(clientId %in% my_session_time$clientId) %>% select(clientId, fid, cid, gid, actual_date)
 y = merge(y, my_session_time, by ='clientId', all.x = TRUE)
 y$methodName<-'website interest clustering'
@@ -157,7 +158,7 @@ print('對網站感興趣的程度做分群 finished')
 
 
 ################################################################################
-##################################### 依照對單一車種感興趣的程度做分群
+##################################### 依照對單一車種感興
 
 ##### 取每個 ID 車種欄位的最大值為感興趣的車種。若最大值重複，則隨意取一種車種為此 ID 感興趣的車種
 km.final_cluster_3 <- data.frame(
@@ -176,7 +177,7 @@ z<- z %>% distinct %>% filter(!is.na(fid) | !is.na(cid) | !is.na(gid)) %>%
   dplyr::summarise(fids = list(as.character(fid)),
                    cids = list(as.character(cid)),
                    gids = list(as.character(gid)))  
-print('依照對單一車種感興趣的程度做分群 finished')
+print('依照對單一 finished')
 
 
 ################################################################################
@@ -185,21 +186,24 @@ print('依照對單一車種感興趣的程度做分群 finished')
 #### output today's result
 x_today=x %>% filter(actual_date == Sys.Date()-1)
 for(i in 1:dim(x_today)[1]){
-  final_x<- jsonlite::toJSON(x_today[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE) # a better solution
-  write(final_x, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_CarInterest_',Sys.Date()-1,'_',i,'.json',sep=''))
+  final_x<- jsonlite::toJSON(x_today[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE)
+  final_x_append <- paste('{"domain": "nissan","data":', final_x ,'}',sep='')
+  write(final_x_append, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_CarInterest_',Sys.Date()-1,'_',i,'.json',sep=''))
 }
 
 y_today=y %>% filter(actual_date == Sys.Date()-1)
 for(i in 1:dim(y_today)[1]){
-  final_y<- jsonlite::toJSON(y_today[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE) # a better solution
-  write(final_y, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_WebIntent_',Sys.Date()-1,'_',i,'.json',sep=''))
+  final_y<- jsonlite::toJSON(y_today[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE)
+  final_y_append <- paste('{"domain": "nissan","data":', final_y ,'}',sep='')
+  write(final_y_append, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_WebIntent_',Sys.Date()-1,'_',i,'.json',sep=''))
 }
 
 
 z_today=z %>% filter(actual_date == Sys.Date()-1)
 for(i in 1:dim(z_today)[1]){
-  final_z<- jsonlite::toJSON(z_today[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE) # a better solution
-  write(final_z, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_CarInterest_Specific_',Sys.Date()-1,'_',i,'.json',sep=''))
+  final_z<- jsonlite::toJSON(z_today[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE)
+  final_z_append <- paste('{"domain": "nissan","data":', final_z ,'}',sep='')
+  write(final_z_append, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_CarInterest_Specific_',Sys.Date()-1,'_',i,'.json',sep=''))
 }
 
 
@@ -209,32 +213,35 @@ print(paste('cluster.R end:',Sys.time()))
 difftime(allend, allstart, Asia/Taipei,units = "mins")
 
 #### output recent days's result
-# x_today=x %>% filter(actual_date >= Sys.Date()-6)
-# for(date in as.character(unique(x_today$actual_date))){
-#   x_temp= x_today %>% filter(actual_date == date)
-#   for(i in 1:dim(x_temp)[1]){
-#     final_x<- jsonlite::toJSON(x_temp[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE) # a better solution
-#     write(final_x, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_CarInterest_',date,'_',i,'.json',sep=''))
-#   }
-# }
-# 
-# y_today=y %>% filter(actual_date >= Sys.Date()-3)
-# for(date in as.character(unique(y_today$actual_date))){
-#   y_temp= y_today %>% filter(actual_date == date)
-#   for(i in 1:dim(y_temp)[1]){
-#     final_y<- jsonlite::toJSON(y_temp[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE) # a better solution
-#     write(final_y, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_WebIntent_',date,'_',i,'.json',sep=''))
-#   }
-# }
-# 
-# z_today=z %>% filter(actual_date >= Sys.Date()-3)
-# for(date in as.character(unique(z_today$actual_date))){
-#   z_temp= z_today %>% filter(actual_date == date)
-#   for(i in 1:dim(z_temp)[1]){
-#     final_z<- jsonlite::toJSON(z_temp[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE) # a better solution
-#     write(final_z, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_CarInterest_Specific_',date,'_',i,'.json',sep=''))
-#   }
-# }
+x_today=x %>% filter(actual_date >= Sys.Date()-2) %>% filter(actual_date != Sys.Date())
+for(date in as.character(unique(x_today$actual_date))){
+  x_temp= x_today %>% filter(actual_date == date)
+  for(i in 1:dim(x_temp)[1]){
+    final_x<- jsonlite::toJSON(x_temp[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE)
+    final_x_append <- paste('{"domain": "nissan","data":', final_x ,'}',sep='')
+    write(final_x_append, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_CarInterest_',date,'_',i,'.json',sep=''))
+  }
+}
+
+y_today=y %>% filter(actual_date >= Sys.Date()-2) %>% filter(actual_date != Sys.Date())
+for(date in as.character(unique(y_today$actual_date))){
+  y_temp= y_today %>% filter(actual_date == date)
+  for(i in 1:dim(y_temp)[1]){
+    final_y<- jsonlite::toJSON(y_temp[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE)
+    final_y_append <- paste('{"domain": "nissan","data":', final_y ,'}',sep='')
+    write(final_y_append, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_WebIntent_',date,'_',i,'.json',sep=''))
+  }
+}
+
+z_today=z %>% filter(actual_date >= Sys.Date()-2) %>% filter(actual_date != Sys.Date())
+for(date in as.character(unique(z_today$actual_date))){
+  z_temp= z_today %>% filter(actual_date == date)
+  for(i in 1:dim(z_temp)[1]){
+    final_z<- jsonlite::toJSON(z_temp[i,c('methodName','groupName','fids','cids','gids')], pretty=TRUE)
+    final_z_append <- paste('{"domain": "nissan","data":', final_z ,'}',sep='')
+    write(final_z_append, file=paste('./_cluster_data/',Sys.Date(),'/',Sys.Date()-1,'_cluster_CarInterest_Specific_',date,'_',i,'.json',sep=''))
+  }
+}
 
 #### output all
 # 
@@ -316,14 +323,8 @@ difftime(allend, allstart, Asia/Taipei,units = "mins")
 # cluster_name<-cluster_name_table(km.cluster_df.scaled.cluster.filter,0.7)
 # km.final_cluster_3<-my_cluster_name(km.final_cluster_3,cluster_name)
 # 
-# fix_cluster_name = c('對「370Z」感興趣的族群','對「ALL NEW LIVINA」感興趣的族群','對「ALL NEW TEANA」感興趣的族群',
+# fix_cluster_name = c('對「370Z」感興趣的族群','對「ALL NEW LIVINA」感興','對「ALL NEW TEANA」感興趣的族群',
 #                      '對「BIG TIIDA & TIIDA」感興趣的族群','對「BIG TIIDA Turbo」感興趣的族群','對「BIG TIIDA」感興趣的族群',
 #                      '對「GT-R」感興趣的族群','對「JUKE」感興趣的族群','對「MURANO」感興趣的族群','對「NEW MARCH」感興趣的族群',
-#                      '對「SENTRA aero」感興趣的族群','對「SUPER SENTRA」感興趣的族群','對「TIIDA」感興趣的族群','對「X-TRAIL」感興趣的族群')
+#                      '對「SENTRA aero」感興趣的族群','對「SUPER SENTRA」感興趣的族群','對「TIIDA」感興趣的族群','對X-TRAIL」感興趣的族群')
 # km.final_cluster_3<- km.final_cluster_3 %>% filter(cluster %in% fix_cluster_name)
-# 
-
-
-
-
-
